@@ -1,0 +1,53 @@
+.insight-tabs {
+  background: rgba(12, 17, 27, 0.9);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.tab-list {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tab-list button {
+  flex: 1;
+  padding: 0.65rem;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.tab-list button.active {
+  color: #49dea3;
+  border-bottom: 2px solid #49dea3;
+}
+
+.tab-content {
+  padding: 1rem;
+  min-height: 160px;
+}
+
+.pose-preview video {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  margin-bottom: 0.5rem;
+}
+
+.caption {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.transcript-preview {
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.transcript-preview .muted,
+.graph-preview .muted {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55);
+}

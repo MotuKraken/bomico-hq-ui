@@ -1,0 +1,43 @@
+.asset-panel {
+  background: rgba(12, 17, 26, 0.92);
+  border-radius: 16px;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.asset-panel h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.asset-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.asset-panel li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0.4rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.asset-panel li:last-child {
+  border-bottom: none;
+}
+
+.asset-panel span {
+  display: block;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.asset-panel a {
+  color: #49dea3;
+  text-decoration: none;
+}

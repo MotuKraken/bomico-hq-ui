@@ -1,0 +1,63 @@
+.video-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.video-card {
+  background: linear-gradient(180deg, rgba(18, 25, 38, 0.94), rgba(12, 18, 27, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  padding: 1rem;
+  box-shadow: 0 30px 80px rgba(2, 5, 10, 0.5);
+}
+
+.video-card video {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.4);
+  margin-bottom: 1rem;
+}
+
+.video-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.video-meta h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.video-meta h1 span {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 1rem;
+  margin-left: 0.4rem;
+}
+
+.file-info {
+  margin: 0.25rem 0;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.timings {
+  display: flex;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.timings span {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.timings strong {
+  font-size: 1.2rem;
+}
