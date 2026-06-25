@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 import type { Project, ChatMessage, Usage, Approval, CreateProjectPayload } from './types'
-import { fetchProjects, createProject, deleteProject, fetchUsage, fetchApprovals } from './api'
+import { fetchProjects, createProject, deleteProject, fetchUsage, fetchApprovals, initProject } from './api'
 import LoginPage from './components/LoginPage'
 import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
@@ -73,6 +73,21 @@ export default function App() {
     setProjects(prev => [...prev, p])
     setShowNewProject(false)
     selectProject(p)
+    // Auto-initialize: generate smart checklist + welcome message
+    try {
+      const init = await initProject(p.id)
+      if (init.ok) {
+        setProjects(prev => prev.map(x => x.id === p.id ? init.project : x))
+        setChatStore(prev => ({
+          ...prev,
+          [p.id]: [{
+            role: 'assistant' as const,
+            content: init.welcome,
+            timestamp: new Date().toISOString()
+          }]
+        }))
+      }
+    } catch { /* init failed silently, project still created */ }
   }
 
   function handleProjectUpdated(updated: Project) {

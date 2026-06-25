@@ -56,23 +56,18 @@ export const updateProject  = (id: string, p: UpdateProjectPayload) => Projects.
 
 // ─── Chat ──────────────────────────────────────────────────────────────────
 interface SendChatArgs { message: string; projectId?: string }
-interface SendChatResponse { ok: boolean; sessionLabel: string; result: unknown }
+interface SendChatResponse { ok: boolean; reply: string; sessionKey: string }
 
 export async function sendChat(args: SendChatArgs): Promise<string> {
   const r = await apiFetch<SendChatResponse>('POST', '/chat/send', args)
-  try {
-    // Try to extract text from OpenClaw tools/invoke result structure
-    const res = r.result as Record<string, unknown>
-    const inner = res?.result as Record<string, unknown>
-    const content = inner?.content as Array<{type: string; text: string}> | undefined
-    if (Array.isArray(content)) {
-      const tp = content.find(c => c.type === 'text')
-      if (tp?.text) return tp.text
-    }
-    if (typeof inner?.text === 'string') return inner.text as string
-  } catch { /* fall through */ }
-  return r.ok ? '✓' : 'Error'
+  if (r.reply) return r.reply
+  return r.ok ? '✓' : 'Keine Antwort erhalten'
 }
+
+export const initProject = (projectId: string) =>
+  apiFetch<{ ok: boolean; project: Project; welcome: string }>(
+    'POST', `/projects/${projectId}/init`, {}
+  )
 
 export const Chat = {
   send: sendChat,

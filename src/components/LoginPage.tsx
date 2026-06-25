@@ -26,19 +26,29 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
       <div className="login-card">
         <div className="login-logo">⬡ BOMIKO HQ</div>
         <div className="login-sub">Mission Control — Private Access</div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="on">
           <label className="login-label">Benutzername</label>
-          <input className="login-input" type="text" value={username}
+          <input
+            className="login-input"
+            type="text"
+            value={username}
             onChange={e => setUsername(e.target.value)}
-            placeholder="motukraken" autoFocus autoComplete="username" />
+            autoComplete="username"
+            autoFocus
+          />
           <label className="login-label">Passwort</label>
-          <input className="login-input" type="password" value={pw}
+          <input
+            className="login-input"
+            type="password"
+            value={pw}
             onChange={e => setPw(e.target.value)}
-            placeholder="••••••••••••" autoComplete="current-password" />
-          <button className="login-btn" type="submit" disabled={loading || !username || !pw}>
-            {loading ? 'Anmelden…' : 'Anmelden'}
+            autoComplete="current-password"
+          />
+          <button className="login-btn" type="submit"
+            disabled={loading || !username.trim() || !pw.trim()}>
+            {loading ? 'Anmelden…' : 'Anmelden →'}
           </button>
-          {err && <div className="login-error">{err}</div>}
+          {err && <div className="login-error">⚠ {err}</div>}
         </form>
       </div>
     </div>

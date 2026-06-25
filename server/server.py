@@ -1,7 +1,4 @@
-"""
-BOMIKO HQ — Backend Server
-Port 8898 → hq.bomiko.de via Cloudflare Tunnel
-"""
+"""BOMIKO HQ — Backend Server v2 (port 8898 → hq.bomiko.de)"""
 import asyncio, json, os, secrets, subprocess, time
 from pathlib import Path
 from typing import Optional, List
@@ -13,30 +10,26 @@ from fastapi.staticfiles import StaticFiles
 from jose import jwt, JWTError
 from pydantic import BaseModel
 
-# ─── Config ─────────────────────────────────────────────────────────────────
-OC_BASE      = "http://127.0.0.1:18789"
-OC_TOKEN     = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "")  # set in ~/.openclaw/service-env/
-OC_HEADERS   = {"Authorization": f"Bearer {OC_TOKEN}", "Content-Type": "application/json"}
-
+# ── Config ────────────────────────────────────────────────────────────────────
 VAULT         = Path.home() / "Documents/Vault-Konsolidiert"
 PROJECTS_FILE = VAULT / "04_Projekte/dashboard-projects.json"
 PASSWORD_FILE = Path.home() / ".openclaw/secrets/dashboard-password"
 USERNAME_FILE = Path.home() / ".openclaw/secrets/dashboard-username"
 STATIC_DIR    = Path(__file__).parent / "dist"
+OC_PATH       = "/Users/petermettler/.openclaw/tools/node-v22.22.0/bin/openclaw"
+OC_ENV        = {**os.environ, "PATH": "/Users/petermettler/.openclaw/tools/node-v22.22.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"}
 
 _jwt_secret = secrets.token_hex(32)
 
-app = FastAPI(title="BOMIKO HQ", version="1.0.0")
+app = FastAPI(title="BOMIKO HQ", version="2.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
-# ─── Auth ─────────────────────────────────────────────────────────────────────
-def _get_password() -> str:
-    if PASSWORD_FILE.exists():
-        return PASSWORD_FILE.read_text().strip()
-    default = "bomiko2026"
-    PASSWORD_FILE.write_text(default)
-    return default
+# ── Auth ──────────────────────────────────────────────────────────────────────
+def _creds():
+    pw = PASSWORD_FILE.read_text().strip() if PASSWORD_FILE.exists() else "bomiko2026"
+    un = USERNAME_FILE.read_text().strip() if USERNAME_FILE.exists() else "motukraken"
+    return un, pw
 
 class LoginBody(BaseModel):
     username: str
@@ -44,11 +37,13 @@ class LoginBody(BaseModel):
 
 @app.post("/api/auth/login")
 async def login(body: LoginBody):
-    expected_user = USERNAME_FILE.read_text().strip() if USERNAME_FILE.exists() else "motukraken"
-    if body.username != expected_user or body.password != _get_password():
-        raise HTTPException(status_code=401, detail="Wrong credentials")
+    expected_user, expected_pw = _creds()
+    if body.username != expected_user or body.password != expected_pw:
+        # Uniform delay to prevent timing attacks
+        await asyncio.sleep(0.5)
+        raise HTTPException(status_code=401, detail="Falsche Anmeldedaten")
     token = jwt.encode(
-        {"sub": "peter", "exp": int(time.time()) + 86400 * 30},
+        {"sub": body.username, "exp": int(time.time()) + 86400 * 30},
         _jwt_secret, algorithm="HS256"
     )
     return {"token": token}
@@ -56,31 +51,38 @@ async def login(body: LoginBody):
 def verify_token(request: Request) -> str:
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401)
     try:
-        jwt.decode(auth[7:], _jwt_secret, algorithms=["HS256"])
-        return "peter"
+        data = jwt.decode(auth[7:], _jwt_secret, algorithms=["HS256"])
+        return data["sub"]
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401)
 
-# ─── OpenClaw proxy ───────────────────────────────────────────────────────────
-async def oc_invoke(tool: str, args: dict, timeout: float = 120.0) -> dict:
-    async with httpx.AsyncClient() as client:
-        r = await client.post(f"{OC_BASE}/tools/invoke",
-            json={"tool": tool, "args": args}, headers=OC_HEADERS, timeout=timeout)
-        return r.json()
-
-def _parse_oc_text(result: dict) -> str:
+# ── OpenClaw agent CLI ────────────────────────────────────────────────────────
+async def run_agent(message: str, session_key: str) -> str:
+    """Run an openclaw agent turn via CLI, returns response text."""
+    proc = await asyncio.create_subprocess_exec(
+        OC_PATH, "agent",
+        "--agent", "main",
+        "--session-key", session_key,
+        "--message", message,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=OC_ENV
+    )
     try:
-        content = result.get("result", {}).get("content", [])
-        for c in content:
-            if c.get("type") == "text":
-                return c["text"]
-    except Exception:
-        pass
-    return json.dumps(result)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+    except asyncio.TimeoutError:
+        proc.kill()
+        raise HTTPException(status_code=504, detail="Agent timeout")
 
-# ─── Projects ─────────────────────────────────────────────────────────────────
+    if proc.returncode != 0:
+        err = stderr.decode()[:300]
+        raise HTTPException(status_code=500, detail=f"Agent error: {err}")
+
+    return stdout.decode().strip()
+
+# ── Projects ──────────────────────────────────────────────────────────────────
 def _load_projects() -> list:
     if PROJECTS_FILE.exists():
         try:
@@ -107,16 +109,86 @@ async def list_projects(user=Depends(verify_token)):
 async def create_project(body: ProjectBody, user=Depends(verify_token)):
     projects = _load_projects()
     pid = secrets.token_hex(4)
-    task_name = f"hq-project-{pid}"
+    session_key = f"agent:main:explicit:hq-project-{pid}"
+
+    # Auto-generate checklist from goals, or blank
+    checklist = [
+        {"id": secrets.token_hex(4), "text": g, "done": False}
+        for g in body.goals if g.strip()
+    ]
+
     project = {
-        "id": pid, "title": body.title, "description": body.description,
-        "goals": body.goals, "color": body.color, "taskName": task_name,
-        "sessionKey": None, "created": time.time(),
-        "checklist": [{"id": secrets.token_hex(4), "text": g, "done": False} for g in body.goals]
+        "id": pid,
+        "title": body.title,
+        "description": body.description,
+        "goals": body.goals,
+        "color": body.color,
+        "sessionKey": session_key,
+        "createdAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "checklist": checklist
     }
     projects.append(project)
     _save_projects(projects)
     return project
+
+@app.post("/api/projects/{pid}/init")
+async def init_project(pid: str, user=Depends(verify_token)):
+    """Auto-initialize project: generate smart checklist + first chat message via AI."""
+    projects = _load_projects()
+    project = next((p for p in projects if p["id"] == pid), None)
+    if not project:
+        raise HTTPException(status_code=404)
+
+    session_key = project["sessionKey"]
+    title = project["title"]
+    desc = project.get("description", "")
+    existing_goals = project.get("goals", [])
+
+    prompt = f"""Du bist der BOMIKO Assistent für das Projekt: "{title}"
+{f'Beschreibung: {desc}' if desc else ''}
+{f'Erste Ideen: {", ".join(existing_goals)}' if existing_goals else ''}
+
+Erstelle für dieses Projekt:
+1. Eine kurze, präzise Beschreibung (1-2 Sätze) — falls noch nicht vorhanden
+2. Eine Checkliste mit 3-6 konkreten, umsetzbaren Aufgaben
+3. Einen Willkommens-Text (2-3 Sätze) der den Projektstatus zusammenfasst
+
+Antworte NUR als JSON (kein Markdown, kein Erklärungstext):
+{{
+  "description": "...",
+  "checklist": ["Aufgabe 1", "Aufgabe 2", "..."],
+  "welcome": "..."
+}}"""
+
+    try:
+        response = await run_agent(prompt, f"agent:main:explicit:hq-init-{pid}")
+        # Extract JSON from response
+        import re
+        match = re.search(r'\{[\s\S]*\}', response)
+        if match:
+            data = json.loads(match.group())
+            # Update project
+            if data.get("description") and not project.get("description"):
+                project["description"] = data["description"]
+            if data.get("checklist"):
+                project["checklist"] = [
+                    {"id": secrets.token_hex(4), "text": item, "done": False}
+                    for item in data["checklist"]
+                ]
+            _save_projects(projects)
+            return {
+                "ok": True,
+                "project": project,
+                "welcome": data.get("welcome", f"Projekt {title} ist bereit. Wie kann ich helfen?")
+            }
+    except Exception as e:
+        pass
+
+    return {
+        "ok": True,
+        "project": project,
+        "welcome": f"Projekt **{title}** ist gestartet. Beschreibe mir was du erreichen willst."
+    }
 
 @app.put("/api/projects/{pid}")
 async def update_project(pid: str, body: dict, user=Depends(verify_token)):
@@ -124,7 +196,7 @@ async def update_project(pid: str, body: dict, user=Depends(verify_token)):
     for p in projects:
         if p["id"] == pid:
             for k, v in body.items():
-                if k not in ("id", "taskName", "created"):
+                if k not in ("id", "sessionKey", "createdAt"):
                     p[k] = v
             _save_projects(projects)
             return p
@@ -136,35 +208,11 @@ async def delete_project(pid: str, user=Depends(verify_token)):
     _save_projects(projects)
     return {"ok": True}
 
-# ─── Chat ──────────────────────────────────────────────────────────────────────
+# ── Chat ──────────────────────────────────────────────────────────────────────
 class ChatSendBody(BaseModel):
     message: str
     projectId: Optional[str] = None
-
-async def _ensure_session(project: dict) -> str:
-    if project.get("sessionKey"):
-        return project["sessionKey"]
-    task_name = project["taskName"]
-    goals_text = "\n".join(f"- {g}" for g in project.get("goals", []))
-    task_prompt = (
-        f"Du bist der dedizierte Assistent für das Projekt: **{project['title']}**\n"
-        f"Beschreibung: {project.get('description','')}\n"
-    )
-    if goals_text:
-        task_prompt += f"Ziele:\n{goals_text}\n"
-    task_prompt += "\nDu hast Zugriff auf den kompletten Vault und alle Tools. Warte auf Nachrichten."
-    await oc_invoke("sessions_spawn", {
-        "task": task_prompt, "taskName": task_name,
-        "label": f"Project: {project['title']}", "runtime": "subagent"
-    }, timeout=30.0)
-    session_label = f"id:{task_name}"
-    projects = _load_projects()
-    for p in projects:
-        if p["id"] == project["id"]:
-            p["sessionKey"] = session_label
-            break
-    _save_projects(projects)
-    return session_label
+    sessionKey: Optional[str] = None
 
 @app.post("/api/chat/send")
 async def send_chat(body: ChatSendBody, user=Depends(verify_token)):
@@ -173,49 +221,52 @@ async def send_chat(body: ChatSendBody, user=Depends(verify_token)):
         project = next((p for p in projects if p["id"] == body.projectId), None)
         if not project:
             raise HTTPException(status_code=404)
-        session_label = await _ensure_session(project)
+        session_key = project.get("sessionKey") or f"agent:main:explicit:hq-project-{body.projectId}"
+    elif body.sessionKey:
+        session_key = body.sessionKey
     else:
-        session_label = "id:hq-main-chat"
-    result = await oc_invoke("sessions_send", {
-        "label": session_label, "message": body.message, "timeoutSeconds": 120
-    }, timeout=130.0)
-    return {"ok": result.get("ok", False), "sessionLabel": session_label, "result": result}
+        session_key = "agent:main:explicit:hq-main-chat"
 
-@app.get("/api/chat/history")
-async def get_history(sessionLabel: str, limit: int = 50, user=Depends(verify_token)):
-    result = await oc_invoke("sessions_history", {"label": sessionLabel, "limit": limit}, timeout=15.0)
-    try:
-        data = json.loads(_parse_oc_text(result))
-        return {"ok": True, "messages": data.get("messages", []), "raw": data}
-    except Exception:
-        return {"ok": False, "messages": [], "raw": result}
+    reply = await run_agent(body.message, session_key)
+    return {"ok": True, "reply": reply, "sessionKey": session_key}
 
-# ─── Usage ────────────────────────────────────────────────────────────────────
+# ── Usage ─────────────────────────────────────────────────────────────────────
 _usage_cache: dict = {"ts": 0, "data": {}}
+
+OC_BASE    = "http://127.0.0.1:18789"
+OC_TOKEN   = "7d3e73…f2b2"
+OC_HEADERS = {"Authorization": f"Bearer {OC_TOKEN}", "Content-Type": "application/json"}
 
 @app.get("/api/usage")
 async def get_usage(user=Depends(verify_token)):
     global _usage_cache
     now = time.time()
-    if now - _usage_cache["ts"] < 30:
+    if now - _usage_cache["ts"] < 60:
         return _usage_cache["data"]
-    sessions_result = await oc_invoke("sessions_list", {"limit": 200, "activeMinutes": 10080}, timeout=10)
     try:
-        data = json.loads(_parse_oc_text(sessions_result))
-        sessions = data.get("sessions", [])
-        total_cost = sum(s.get("estimatedCostUsd", 0) for s in sessions)
-        total_tokens = sum(s.get("totalTokens", 0) for s in sessions)
-        active_sessions = len([s for s in sessions if s.get("status") == "running"])
+        async with httpx.AsyncClient() as client:
+            r = await client.post(
+                f"{OC_BASE}/tools/invoke",
+                json={"tool": "sessions_list", "args": {"limit": 200, "activeMinutes": 10080}},
+                headers=OC_HEADERS, timeout=10
+            )
+            data = r.json()
+            text = data.get("result", {}).get("content", [{}])[0].get("text", "{}")
+            sessions = json.loads(text).get("sessions", [])
+            total_cost = sum(s.get("estimatedCostUsd", 0) for s in sessions)
+            total_tokens = sum(s.get("totalTokens", 0) for s in sessions)
+            active = len([s for s in sessions if s.get("status") == "running"])
     except Exception:
-        total_cost = total_tokens = active_sessions = 0
+        total_cost = total_tokens = active = 0
+
     budget = 100.0
     usage = {
         "ok": True,
         "estimatedCostUsd": round(total_cost, 4),
         "totalTokens": total_tokens,
-        "activeSessions": active_sessions,
+        "activeSessions": active,
         "budgetMonthlyUsd": budget,
-        "budgetUsedPct": min(100, round((total_cost / budget) * 100, 1)),
+        "budgetUsedPct": min(100, round(total_cost / budget * 100, 1)),
         "updatedAt": int(now)
     }
     _usage_cache = {"ts": now, "data": usage}
@@ -234,15 +285,15 @@ async def get_approvals(user=Depends(verify_token)):
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "ts": int(time.time()), "version": "1.0.0"}
+    return {"ok": True, "ts": int(time.time()), "version": "2.0.0"}
 
-# ─── Static ───────────────────────────────────────────────────────────────────
+# ── Static ────────────────────────────────────────────────────────────────────
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 else:
     @app.get("/")
     async def root():
-        return {"status": "backend ok", "note": "run npm run build in bomiko-hq-ui first"}
+        return {"status": "backend ok", "note": "run npm run build first"}
 
 if __name__ == "__main__":
     import uvicorn
