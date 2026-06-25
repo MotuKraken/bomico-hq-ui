@@ -287,17 +287,7 @@ async def get_approvals(user=Depends(verify_token)):
 async def health():
     return {"ok": True, "ts": int(time.time()), "version": "2.0.0"}
 
-# ── Static ────────────────────────────────────────────────────────────────────
-if STATIC_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
-else:
-    @app.get("/")
-    async def root():
-        return {"status": "backend ok", "note": "run npm run build first"}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("server:app", host="127.0.0.1", port=8898, reload=False, log_level="info")
 
 
 # ── Chat history from transcript ──────────────────────────────────────────────
@@ -311,11 +301,14 @@ async def get_project_chat_history(pid: str, user=Depends(verify_token)):
         raise HTTPException(status_code=404)
 
     # Try multiple possible session key formats
+    sk = project.get("sessionKey", "")
     possible_keys = [
-        f"agent:main:explicit:hq-project-{pid}",
         f"agent:main:id:hq-project-{pid}",
-        project.get("sessionKey", ""),
+        f"agent:main:explicit:hq-project-{pid}",
+        sk,
+        f"agent:main:{sk}" if sk and not sk.startswith("agent:") else sk,
     ]
+    possible_keys = list(dict.fromkeys(k for k in possible_keys if k))
 
     sessions_file = Path.home() / ".openclaw/agents/main/sessions/sessions.json"
     if not sessions_file.exists():
@@ -406,3 +399,16 @@ async def save_chat_to_vault(pid: str, body: dict, user=Depends(verify_token)):
         pass
 
     return {"ok": True, "saved": True, "path": str(out_path)}
+
+
+# ── Static ────────────────────────────────────────────────────────────────────
+if STATIC_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+else:
+    @app.get("/")
+    async def root():
+        return {"status": "backend ok", "note": "run npm run build first"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("server:app", host="127.0.0.1", port=8898, reload=False, log_level="info")
