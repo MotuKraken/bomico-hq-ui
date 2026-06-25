@@ -1,64 +1,72 @@
-export interface NavNode {
-  id: string
-  label: string
-  icon?: string
-  children?: NavNode[]
+// BOMICO HQ – shared TypeScript types
+
+export interface Project {
+  id: string;
+  title: string;
+  description?: string;
+  goals?: string[];
+  color?: string;
+  checklist?: ChecklistItem[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export interface VideoSegment {
-  id: string
-  label: string
-  start: string
-  end: string
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
 }
 
-export interface AssetLinks {
-  transcriptPath: string
-  posePath: string
-  stickFigurePath: string
-  graphRef: string
-  transcriptUrl?: string
+export interface CreateProjectPayload {
+  title: string;
+  description?: string;
+  goals?: string[];
+  color?: string;
 }
 
-export interface KnowledgeGraphNode {
-  id: string
-  label: string
-  type: 'position' | 'technique' | 'reaction' | 'followUp'
+export interface UpdateProjectPayload {
+  title?: string;
+  description?: string;
+  goals?: string[];
+  color?: string;
+  checklist?: ChecklistItem[];
 }
 
-export interface KnowledgeGraphEdge {
-  from: string
-  to: string
-  label?: string
+export interface ChatMessage {
+  id?: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp?: string;
 }
 
-export interface RelatedTechniqueItem {
-  id: string
-  title: string
-  relation: 'counter' | 'defense' | 'followUp' | 'variation'
-  description?: string
-  thumbnail?: string
+export interface ChatSendResponse {
+  ok: boolean;
+  sessionLabel: string;
+  result: string;
 }
 
-export interface TechniqueVideo {
-  id: string
-  title: string
-  subtitle: string
-  heroImage: string
-  videoUrl: string
-  filename: string
-  internalPath: string
-  sourceUrl: string
-  breadcrumbs: string[]
-  tags: string[]
-  focusTags: string[]
-  segments: VideoSegment[]
-  techniqueStart: string
-  techniqueEnd: string
-  assets: AssetLinks
-  knowledgeGraph: {
-    nodes: KnowledgeGraphNode[]
-    edges: KnowledgeGraphEdge[]
-  }
-  related: RelatedTechniqueItem[]
+export interface ChatHistoryResponse {
+  ok: boolean;
+  messages: ChatMessage[];
 }
+
+export interface Usage {
+  estimatedCostUsd: number;
+  budgetUsedPct: number;
+  totalTokens: number;
+  activeSessions: number;
+  budgetMonthlyUsd: number;
+}
+
+export interface Approval {
+  id: string;
+  command?: string;
+  description?: string;
+  createdAt?: string;
+}
+
+export interface ApprovalsResponse {
+  pending: Approval[];
+}
+
+export type View = 'home' | 'project';
