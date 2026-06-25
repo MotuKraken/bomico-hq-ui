@@ -71,7 +71,7 @@ async def run_agent(message: str, session_key: str) -> str:
         env=OC_ENV
     )
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=180)
     except asyncio.TimeoutError:
         proc.kill()
         raise HTTPException(status_code=504, detail="Agent timeout")
