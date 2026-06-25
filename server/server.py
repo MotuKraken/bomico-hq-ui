@@ -298,3 +298,111 @@ else:
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("server:app", host="127.0.0.1", port=8898, reload=False, log_level="info")
+
+
+# ── Chat history from transcript ──────────────────────────────────────────────
+@app.get("/api/projects/{pid}/chat-history")
+async def get_project_chat_history(pid: str, user=Depends(verify_token)):
+    """Load chat history from OpenClaw session transcript file."""
+    import re
+    projects = _load_projects()
+    project = next((p for p in projects if p["id"] == pid), None)
+    if not project:
+        raise HTTPException(status_code=404)
+
+    # Try multiple possible session key formats
+    possible_keys = [
+        f"agent:main:explicit:hq-project-{pid}",
+        f"agent:main:id:hq-project-{pid}",
+        project.get("sessionKey", ""),
+    ]
+
+    sessions_file = Path.home() / ".openclaw/agents/main/sessions/sessions.json"
+    if not sessions_file.exists():
+        return {"ok": True, "messages": []}
+
+    sessions_data = json.loads(sessions_file.read_text())
+    session_id = None
+    for key in possible_keys:
+        if key in sessions_data:
+            session_id = sessions_data[key].get("sessionId")
+            break
+
+    if not session_id:
+        return {"ok": True, "messages": []}
+
+    transcript = Path.home() / f".openclaw/agents/main/sessions/{session_id}.jsonl"
+    if not transcript.exists():
+        return {"ok": True, "messages": []}
+
+    messages = []
+    for line in transcript.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+            if entry.get("type") != "message":
+                continue
+            msg = entry.get("message", {})
+            role = msg.get("role", "")
+            if role not in ("user", "assistant"):
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, list):
+                text = "".join(
+                    c.get("text", "") for c in content
+                    if isinstance(c, dict) and c.get("type") == "text"
+                )
+            else:
+                text = str(content)
+            if text.strip():
+                messages.append({
+                    "role": role,
+                    "content": text,
+                    "timestamp": entry.get("timestamp", "")
+                })
+        except Exception:
+            continue
+
+    return {"ok": True, "messages": messages, "sessionId": session_id}
+
+
+@app.post("/api/projects/{pid}/save-chat")
+async def save_chat_to_vault(pid: str, body: dict, user=Depends(verify_token)):
+    """Save chat history as markdown to Vault."""
+    projects = _load_projects()
+    project = next((p for p in projects if p["id"] == pid), None)
+    if not project:
+        raise HTTPException(status_code=404)
+
+    messages = body.get("messages", [])
+    if not messages:
+        return {"ok": True, "saved": False}
+
+    vault_dir = VAULT / "06_Kommunikation/chats"
+    vault_dir.mkdir(parents=True, exist_ok=True)
+
+    date = time.strftime("%Y-%m-%d")
+    filename = f"{date}_{project['title'].replace(' ','-').lower()}-{pid}.md"
+    out_path = vault_dir / filename
+
+    md = f"# Chat: {project['title']}\n"
+    md += f"**Projekt-ID:** {pid}\n"
+    md += f"**Gespeichert:** {time.strftime('%Y-%m-%d %H:%M')}\n\n---\n\n"
+    for m in messages:
+        role_label = "Peter" if m.get("role") == "user" else "BOMIKO"
+        ts = m.get("timestamp", "")[:16] if m.get("timestamp") else ""
+        md += f"**{role_label}**{f' ({ts})' if ts else ''}:\n{m.get('content','')}\n\n"
+
+    out_path.write_text(md, encoding="utf-8")
+
+    # Git commit
+    try:
+        import subprocess as sp
+        sp.run(["git", "add", str(out_path)], cwd=str(VAULT), timeout=10)
+        sp.run(["git", "commit", "-m", f"Chat: {project['title']} {date}"],
+               cwd=str(VAULT), timeout=10)
+    except Exception:
+        pass
+
+    return {"ok": True, "saved": True, "path": str(out_path)}

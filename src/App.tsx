@@ -1,12 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
 import './App.css'
 import type { Project, ChatMessage, Usage, Approval, CreateProjectPayload } from './types'
-import { fetchProjects, createProject, deleteProject, fetchUsage, fetchApprovals, initProject } from './api'
+import {
+  fetchProjects, createProject, deleteProject, fetchUsage, fetchApprovals,
+  initProject, getChatHistory, saveChatToVault
+} from './api'
 import LoginPage from './components/LoginPage'
 import Sidebar from './components/Sidebar'
 import TopBar from './components/TopBar'
 import ChatPane from './components/ChatPane'
 import ProjectPanel from './components/ProjectPanel'
+import OverviewTab from './components/OverviewTab'
+import ArtifactsTab from './components/ArtifactsTab'
 import NewProjectModal from './components/NewProjectModal'
 
 type ChatStore = Record<string, ChatMessage[]>
@@ -23,7 +28,21 @@ export default function App() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('chat')
   const [showNewProject, setShowNewProject] = useState(false)
-  const [chatStore, setChatStore] = useState<ChatStore>({ home: [] })
+
+  // Chat store: persisted to localStorage
+  const [chatStore, setChatStore] = useState<ChatStore>(() => {
+    try {
+      const saved = localStorage.getItem('bomiko_chats')
+      return saved ? JSON.parse(saved) : { home: [] }
+    } catch { return { home: [] } }
+  })
+
+  // Persist chat store to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('bomiko_chats', JSON.stringify(chatStore))
+    } catch { /* quota exceeded, ignore */ }
+  }, [chatStore])
 
   // ── Data loading ────────────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
@@ -54,10 +73,18 @@ export default function App() {
     setTab('chat')
   }
 
-  function selectProject(p: Project) {
+  async function selectProject(p: Project) {
     setActiveProjectId(p.id)
     setTab('chat')
-    setChatStore(prev => ({ ...prev, [p.id]: prev[p.id] ?? [] }))
+    // Load history from server if chat store for this project is empty
+    if (!chatStore[p.id] || chatStore[p.id].length === 0) {
+      try {
+        const result = await getChatHistory(p.id)
+        if (result.ok && result.messages.length > 0) {
+          setChatStore(prev => ({ ...prev, [p.id]: result.messages }))
+        }
+      } catch { /* ignore */ }
+    }
   }
 
   // ── Chat ──────────────────────────────────────────────────────────────
@@ -72,8 +99,9 @@ export default function App() {
     const p = await createProject(payload)
     setProjects(prev => [...prev, p])
     setShowNewProject(false)
-    selectProject(p)
-    // Auto-initialize: generate smart checklist + welcome message
+    setActiveProjectId(p.id)
+    setTab('chat')
+    // Auto-initialize
     try {
       const init = await initProject(p.id)
       if (init.ok) {
@@ -87,7 +115,7 @@ export default function App() {
           }]
         }))
       }
-    } catch { /* init failed silently, project still created */ }
+    } catch { /* silent */ }
   }
 
   function handleProjectUpdated(updated: Project) {
@@ -100,13 +128,23 @@ export default function App() {
     if (activeProjectId === id) setActiveProjectId(null)
   }
 
+  // ── Vault sync ────────────────────────────────────────────────────────
+  async function handleSaveChat() {
+    if (!activeProjectId) return
+    const msgs = chatStore[activeProjectId] ?? []
+    if (msgs.length === 0) return
+    try {
+      await saveChatToVault(activeProjectId, msgs)
+    } catch { /* ignore */ }
+  }
+
   if (!token) return <LoginPage onLogin={handleLogin} />
 
   const activeProject = activeProjectId
     ? projects.find(p => p.id === activeProjectId) ?? null
     : null
 
-  const showPanel = activeProject !== null
+  const showPanel = activeProject !== null && tab === 'chat'
   const title = activeProject ? activeProject.title : 'BOMIKO HQ'
 
   return (
@@ -128,16 +166,39 @@ export default function App() {
         approvals={approvals}
         loading={loadingData}
         onRefresh={loadAll}
+        onSaveChat={handleSaveChat}
       />
 
       <main className={`main-area${showPanel ? ' with-panel' : ''}`}>
-        <ChatPane
-          project={activeProject}
-          messages={chatStore[chatKey] ?? []}
-          onNewMessage={handleNewMessage}
-          sessionLabel={activeProject ? `id:hq-project-${activeProject.id}` : 'id:hq-main-chat'}
-        />
+        {/* CHAT TAB */}
+        {tab === 'chat' && (
+          <ChatPane
+            project={activeProject}
+            messages={chatStore[chatKey] ?? []}
+            onNewMessage={handleNewMessage}
+            sessionLabel={activeProject ? `agent:main:id:hq-project-${activeProject.id}` : 'agent:main:explicit:hq-main-chat'}
+          />
+        )}
+        {/* OVERVIEW TAB */}
+        {tab === 'overview' && activeProject && (
+          <OverviewTab
+            project={activeProject}
+            onProjectUpdated={handleProjectUpdated}
+          />
+        )}
+        {/* ARTIFACTS TAB */}
+        {tab === 'artifacts' && activeProject && (
+          <ArtifactsTab project={activeProject} />
+        )}
+        {/* HOME OVERVIEW */}
+        {tab === 'overview' && !activeProject && (
+          <div style={{ padding: 32, color: 'var(--muted)' }}>
+            <h2 style={{ marginBottom: 12 }}>Übersicht</h2>
+            <p>{projects.length} Projekte · {approvals.length} offene Approvals</p>
+          </div>
+        )}
 
+        {/* PROJECT PANEL (right side, chat tab only) */}
         {showPanel && activeProject && (
           <ProjectPanel
             project={activeProject}

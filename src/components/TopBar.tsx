@@ -11,9 +11,10 @@ interface Props {
   approvals: Approval[]
   loading: boolean
   onRefresh: () => Promise<void>
+  onSaveChat?: () => void
 }
 
-export function TopBar({ title, project, tab, onTabChange, usage, approvals, loading, onRefresh }: Props) {
+export function TopBar({ title, project, tab, onTabChange, usage, approvals, loading, onRefresh, onSaveChat }: Props) {
   const pct = usage?.budgetUsedPct ?? 0
   const barColor = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)'
 
@@ -22,18 +23,17 @@ export function TopBar({ title, project, tab, onTabChange, usage, approvals, loa
       <div className="topbar-left">
         {project && <div className="proj-dot" style={{ background: project.color ?? 'var(--accent)' }} />}
         <span className="topbar-title">{title}</span>
+
         {project && (
           <>
             <span className="topbar-sep">›</span>
-            <button className={`topbar-tab${tab === 'chat' ? ' active' : ''}`} onClick={() => onTabChange('chat')}>
-              💬 Chat
-            </button>
-            <button className={`topbar-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => onTabChange('overview')}>
-              📋 Übersicht
-            </button>
-            <button className={`topbar-tab${tab === 'artifacts' ? ' active' : ''}`} onClick={() => onTabChange('artifacts')}>
-              📎 Artefakte
-            </button>
+            {(['chat','overview','artifacts'] as Tab[]).map(t => (
+              <button key={t}
+                className={`topbar-tab${tab === t ? ' active' : ''}`}
+                onClick={() => onTabChange(t)}>
+                {t === 'chat' ? '💬 Chat' : t === 'overview' ? '📋 Übersicht' : '📎 Artefakte'}
+              </button>
+            ))}
           </>
         )}
       </div>
@@ -52,7 +52,12 @@ export function TopBar({ title, project, tab, onTabChange, usage, approvals, loa
             <span className="usage-dim">{usage.activeSessions} sessions</span>
           </div>
         )}
-        <div className="status-dot" title="Online" />
+        {project && tab === 'chat' && onSaveChat && (
+          <button className="topbar-save-btn" onClick={onSaveChat} title="Chat in Vault speichern">
+            💾
+          </button>
+        )}
+        <div className="status-dot" />
         <button className="topbar-refresh" onClick={onRefresh} disabled={loading}>
           {loading ? '⟳' : '↺'}
         </button>

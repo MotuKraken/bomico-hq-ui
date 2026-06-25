@@ -88,3 +88,11 @@ export const Approvals = {
   get: () => apiFetch<ApprovalsResponse>('GET', '/approvals')
 }
 export const fetchApprovals = () => Approvals.get()
+
+export const getChatHistory = (projectId: string) =>
+  apiFetch<{ ok: boolean; messages: ChatMessage[] }>('GET', `/projects/${projectId}/chat-history`)
+
+export const saveChatToVault = (projectId: string, messages: ChatMessage[]) =>
+  apiFetch<{ ok: boolean; saved: boolean; path: string }>(
+    'POST', `/projects/${projectId}/save-chat`, { messages }
+  )
