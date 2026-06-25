@@ -1,59 +1,62 @@
-import type { Usage, Approval } from '../types'
+import type { Usage, Approval, Project } from '../types'
+
+type Tab = 'chat' | 'overview' | 'artifacts'
 
 interface Props {
   title: string
+  project: Project | null
+  tab: Tab
+  onTabChange: (t: Tab) => void
   usage: Usage | null
   approvals: Approval[]
   loading: boolean
   onRefresh: () => Promise<void>
 }
 
-export function TopBar({ title, usage, approvals, loading, onRefresh }: Props) {
+export function TopBar({ title, project, tab, onTabChange, usage, approvals, loading, onRefresh }: Props) {
   const pct = usage?.budgetUsedPct ?? 0
-  const barClass = pct < 60 ? 'low' : pct < 85 ? 'mid' : 'high'
-  const pendingCount = approvals.length
+  const barColor = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)'
 
   return (
     <header className="hq-topbar">
-      <div className={`topbar-dot${usage ? '' : ' offline'}`} />
-      <div className="topbar-title">
-        {title}
+      <div className="topbar-left">
+        {project && <div className="proj-dot" style={{ background: project.color ?? 'var(--accent)' }} />}
+        <span className="topbar-title">{title}</span>
+        {project && (
+          <>
+            <span className="topbar-sep">›</span>
+            <button className={`topbar-tab${tab === 'chat' ? ' active' : ''}`} onClick={() => onTabChange('chat')}>
+              💬 Chat
+            </button>
+            <button className={`topbar-tab${tab === 'overview' ? ' active' : ''}`} onClick={() => onTabChange('overview')}>
+              📋 Übersicht
+            </button>
+            <button className={`topbar-tab${tab === 'artifacts' ? ' active' : ''}`} onClick={() => onTabChange('artifacts')}>
+              📎 Artefakte
+            </button>
+          </>
+        )}
       </div>
 
-      {usage && (
-        <div className="usage-widget">
-          <span className="usage-label">Budget</span>
-          <div className="usage-bar-wrap">
-            <div className={`usage-bar ${barClass}`} style={{ width: `${pct}%` }} />
+      <div className="topbar-right">
+        {approvals.length > 0 && (
+          <span className="topbar-badge-red">{approvals.length} pending</span>
+        )}
+        {usage && (
+          <div className="usage-pill">
+            <div className="usage-bar-w">
+              <div className="usage-bar-f" style={{ width: `${pct}%`, background: barColor }} />
+            </div>
+            <span className="usage-cost">${usage.estimatedCostUsd.toFixed(2)}</span>
+            <span className="usage-dim">/ ${usage.budgetMonthlyUsd}</span>
+            <span className="usage-dim">{usage.activeSessions} sessions</span>
           </div>
-          <span className="usage-cost">${usage.estimatedCostUsd.toFixed(2)}</span>
-          <span className="usage-label">/ ${usage.budgetMonthlyUsd}</span>
-          <span className="usage-label" style={{ marginLeft:6 }}>
-            {usage.activeSessions} sessions
-          </span>
-        </div>
-      )}
-
-      {pendingCount > 0 && (
-        <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12 }}>
-          <span style={{ background:'var(--red)', color:'#fff', borderRadius:4, padding:'2px 7px', fontWeight:600 }}>
-            {pendingCount} pending
-          </span>
-        </div>
-      )}
-
-      <button
-        style={{
-          background:'var(--card)', border:'1px solid var(--border)',
-          borderRadius:'var(--radius)', color:'var(--text-muted)',
-          padding:'4px 10px', cursor:'pointer', fontSize:11,
-          opacity: loading ? 0.5 : 1
-        }}
-        onClick={onRefresh}
-        disabled={loading}
-      >
-        {loading ? '⟳' : '↺'} Refresh
-      </button>
+        )}
+        <div className="status-dot" title="Online" />
+        <button className="topbar-refresh" onClick={onRefresh} disabled={loading}>
+          {loading ? '⟳' : '↺'}
+        </button>
+      </div>
     </header>
   )
 }

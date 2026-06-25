@@ -1,184 +1,162 @@
-import { useState, useRef, useEffect } from 'react';
-import type { KeyboardEvent } from 'react';
-import type { Project, ChatMessage } from '../types';
-import { sendChat } from '../api';
+import { useState, useRef, useEffect } from 'react'
+import type { Project, ChatMessage } from '../types'
+import { sendChat } from '../api'
 
-interface ChatPaneProps {
-  project: Project | null;   // null = home chat
-  messages: ChatMessage[];
-  onNewMessage: (msg: ChatMessage) => void;
-  sessionLabel: string | null;
+interface Props {
+  project: Project | null
+  messages: ChatMessage[]
+  onNewMessage: (msg: ChatMessage) => void
+  sessionLabel: string | null
 }
 
-function formatTime(ts?: string): string {
-  if (!ts) return '';
-  try {
-    const d = new Date(ts);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '';
-  }
+function fmt(ts?: string) {
+  if (!ts) return ''
+  try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+  catch { return '' }
 }
 
-export default function ChatPane({
-  project,
-  messages,
-  onNewMessage,
-  sessionLabel,
-}: ChatPaneProps) {
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
-  const endRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+export default function ChatPane({ project, messages, onNewMessage, sessionLabel }: Props) {
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, sending]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, sending])
 
-  // Auto-resize textarea
-  function handleInput() {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = 'auto';
-    ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`;
+  function autoResize() {
+    const ta = textareaRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    ta.style.height = Math.min(ta.scrollHeight, 160) + 'px'
   }
 
   async function handleSend() {
-    const text = input.trim();
-    if (!text || sending) return;
-    setInput('');
-    setError('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
+    const text = input.trim()
+    if (!text || sending) return
+    setInput('')
+    setError(null)
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
     const userMsg: ChatMessage = {
       role: 'user',
       content: text,
-      timestamp: new Date().toISOString(),
-    };
-    onNewMessage(userMsg);
-    setSending(true);
+      timestamp: new Date().toISOString()
+    }
+    onNewMessage(userMsg)
+    setSending(true)
 
     try {
-      const replyText = await sendChat({ message: text, projectId: project?.id });
-      const assistantMsg: ChatMessage = {
+      const reply = await sendChat({ message: text, projectId: project?.id })
+      onNewMessage({
         role: 'assistant',
-        content: replyText,
-        timestamp: new Date().toISOString(),
-      };
-      onNewMessage(assistantMsg);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Send failed';
-      setError(message);
+        content: reply,
+        timestamp: new Date().toISOString()
+      })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Fehler beim Senden')
     } finally {
-      setSending(false);
+      setSending(false)
     }
   }
 
-  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+  function handleKey(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+      e.preventDefault()
+      handleSend()
     }
   }
 
-  const placeholder = project
-    ? `Ask anything about ${project.title}…`
-    : 'Ask BOMIKO anything…';
+  const ctxLabel = sessionLabel ?? (project ? `id:hq-project-${project.id}` : 'id:hq-main-chat')
+  const today = new Date().toLocaleDateString('de-CH', { day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <div className="chat-pane">
-      {/* Project context header */}
-      {project && (
-        <div className="chat-project-header">
-          <div
-            className="chat-project-dot"
-            style={{ background: project.color || 'var(--accent)' }}
-          />
-          <span className="chat-project-name">{project.title}</span>
-          <span className="chat-project-hint">project context active</span>
-        </div>
-      )}
+      {/* Session info bar */}
+      <div className="chat-session-bar">
+        <span>Session:</span>
+        <span className="session-tag">{ctxLabel}</span>
+        {project && <span className="ctx-badge">project context active</span>}
+      </div>
 
       {/* Messages */}
       <div className="chat-messages">
-        {messages.length === 0 && !sending && (
+        {messages.length === 0 ? (
           <div className="chat-empty">
-            <div className="chat-empty-icon">
-              {project ? '📋' : '🤖'}
-            </div>
-            <div className="chat-empty-hint">
+            <div className="empty-icon">◈</div>
+            <h3>{project ? project.title : 'BOMIKO HQ'}</h3>
+            <p>
               {project
-                ? `Chat with BOMIKO in the context of "${project.title}". Ask about goals, progress, next steps.`
-                : 'Ask BOMIKO anything. Full agent capabilities are available here.'}
-            </div>
+                ? `Projekt-Chat. Ich kenne Ziele und Kontext von "${project.title}". Frag mich alles.`
+                : 'Hauptchat. Ich habe Zugriff auf alle Projekte, den Vault und alle Tools.'}
+            </p>
           </div>
-        )}
-
-        {messages.map((msg, i) => (
-          <div key={i} className={`chat-msg ${msg.role}`}>
-            <div className="chat-msg-label">
-              {msg.role === 'user' ? 'You' : 'BOMIKO'}
-            </div>
-            <div className="chat-msg-bubble">{msg.content}</div>
-            {msg.timestamp && (
-              <div className="chat-msg-meta">{formatTime(msg.timestamp)}</div>
+        ) : (
+          <>
+            <div className="chat-date-div">{today}</div>
+            {project && (
+              <div className="chat-sys">
+                🚀 Projekt-Session: <strong>{project.title}</strong> — voller Vault-Zugriff aktiv
+              </div>
             )}
-          </div>
-        ))}
-
-        {sending && (
-          <div className="chat-typing">
-            <div className="chat-typing-dots">
-              <span /><span /><span />
-            </div>
-            BOMIKO is thinking…
-          </div>
+            {messages.map((msg, i) => (
+              <div key={i} className={`msg ${msg.role}`}>
+                <div className="msg-av">
+                  {msg.role === 'user' ? 'P' : 'B'}
+                </div>
+                <div className="msg-body">
+                  <div className="msg-meta">
+                    <span className="msg-name">{msg.role === 'user' ? 'Peter' : 'BOMIKO'}</span>
+                    {' · '}{fmt(msg.timestamp)}
+                  </div>
+                  <div className="msg-text">{msg.content}</div>
+                </div>
+              </div>
+            ))}
+            {sending && (
+              <div className="msg assistant">
+                <div className="msg-av">B</div>
+                <div className="msg-body">
+                  <div className="msg-meta"><span className="msg-name">BOMIKO</span></div>
+                  <div className="chat-thinking">
+                    <div className="thinking-dot" />
+                    <div className="thinking-dot" />
+                    <div className="thinking-dot" />
+                  </div>
+                </div>
+              </div>
+            )}
+            {error && (
+              <div style={{ color: 'var(--red)', fontSize: 12, padding: '4px 0' }}>⚠ {error}</div>
+            )}
+          </>
         )}
-
-        {error && (
-          <div className="error-banner" style={{ margin: '0' }}>
-            ⚠ {error}
-          </div>
-        )}
-
-        <div ref={endRef} />
+        <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
+      {/* Input */}
       <div className="chat-input-area">
-        {sessionLabel && (
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6 }}>
-            Session: {sessionLabel}
-          </div>
-        )}
         <div className="chat-input-row">
           <textarea
             ref={textareaRef}
-            className="chat-input"
+            className="chat-textarea"
             value={input}
-            onChange={e => setInput(e.target.value)}
-            onInput={handleInput}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
+            onChange={e => { setInput(e.target.value); autoResize() }}
+            onKeyDown={handleKey}
+            placeholder={project
+              ? `Schreibe an ${project.title}…`
+              : 'Schreibe eine Nachricht… (Enter = senden)'}
             rows={1}
             disabled={sending}
           />
-          <button
-            className="chat-send-btn"
-            onClick={handleSend}
-            disabled={!input.trim() || sending}
-          >
-            {sending ? '…' : 'Send'}
+          <button className="send-btn" onClick={handleSend} disabled={!input.trim() || sending}>
+            ↑
           </button>
         </div>
-        <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 5 }}>
-          Enter to send · Shift+Enter for new line
-        </div>
+        <div className="chat-hint">Enter = senden · Shift+Enter = neue Zeile · Zugriff auf Vault &amp; Memory</div>
       </div>
     </div>
-  );
+  )
 }

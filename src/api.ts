@@ -37,7 +37,7 @@ async function apiFetch<T>(method: string, path: string, body?: unknown): Promis
 
 // ─── Auth ──────────────────────────────────────────────────────────────────
 export const Auth = {
-  login: (password: string) => apiFetch<{ token: string }>('POST', '/auth/login', { password })
+  login: (username: string, password: string) => apiFetch<{ token: string }>('POST', '/auth/login', { username, password })
 }
 
 // ─── Projects ─────────────────────────────────────────────────────────────

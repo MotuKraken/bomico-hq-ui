@@ -21,6 +21,7 @@ OC_HEADERS   = {"Authorization": f"Bearer {OC_TOKEN}", "Content-Type": "applicat
 VAULT         = Path.home() / "Documents/Vault-Konsolidiert"
 PROJECTS_FILE = VAULT / "04_Projekte/dashboard-projects.json"
 PASSWORD_FILE = Path.home() / ".openclaw/secrets/dashboard-password"
+USERNAME_FILE = Path.home() / ".openclaw/secrets/dashboard-username"
 STATIC_DIR    = Path(__file__).parent / "dist"
 
 _jwt_secret = secrets.token_hex(32)
@@ -38,12 +39,14 @@ def _get_password() -> str:
     return default
 
 class LoginBody(BaseModel):
+    username: str
     password: str
 
 @app.post("/api/auth/login")
 async def login(body: LoginBody):
-    if body.password != _get_password():
-        raise HTTPException(status_code=401, detail="Wrong password")
+    expected_user = USERNAME_FILE.read_text().strip() if USERNAME_FILE.exists() else "motukraken"
+    if body.username != expected_user or body.password != _get_password():
+        raise HTTPException(status_code=401, detail="Wrong credentials")
     token = jwt.encode(
         {"sub": "peter", "exp": int(time.time()) + 86400 * 30},
         _jwt_secret, algorithm="HS256"

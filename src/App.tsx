@@ -1,188 +1,131 @@
-import { useState, useEffect, useCallback } from 'react';
-import './App.css';
+import { useState, useEffect, useCallback } from 'react'
+import './App.css'
+import type { Project, ChatMessage, Usage, Approval, CreateProjectPayload } from './types'
+import { fetchProjects, createProject, deleteProject, fetchUsage, fetchApprovals } from './api'
+import LoginPage from './components/LoginPage'
+import Sidebar from './components/Sidebar'
+import TopBar from './components/TopBar'
+import ChatPane from './components/ChatPane'
+import ProjectPanel from './components/ProjectPanel'
+import NewProjectModal from './components/NewProjectModal'
 
-import type { Project, ChatMessage, Usage, Approval, CreateProjectPayload } from './types';
-import {
-  fetchProjects,
-  createProject,
-  deleteProject,
-  fetchUsage,
-  fetchApprovals,
-
-} from './api';
-
-import LoginPage from './components/LoginPage';
-import Sidebar from './components/Sidebar';
-import TopBar from './components/TopBar';
-import ChatPane from './components/ChatPane';
-import ProjectDetail from './components/ProjectDetail';
-import NewProjectModal from './components/NewProjectModal';
-
-// Chat history keyed by context: 'home' or project id
-type ChatStore = Record<string, ChatMessage[]>;
-
-// View state
-type ActiveView =
-  | { kind: 'home' }
-  | { kind: 'project-detail'; projectId: string }
-  | { kind: 'project-chat'; projectId: string };
-
-function getTitle(view: ActiveView, projects: Project[]): string {
-  if (view.kind === 'home') return 'BOMIKO HQ';
-  const p = projects.find(x => x.id === view.projectId);
-  if (!p) return 'BOMIKO HQ';
-  return view.kind === 'project-chat' ? `Chat · ${p.title}` : p.title;
-}
+type ChatStore = Record<string, ChatMessage[]>
+type Tab = 'chat' | 'overview' | 'artifacts'
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('bomiko_token'));
+  const [token, setToken] = useState<string | null>(
+    () => localStorage.getItem('bomiko_token')
+  )
+  const [projects, setProjects] = useState<Project[]>([])
+  const [usage, setUsage] = useState<Usage | null>(null)
+  const [approvals, setApprovals] = useState<Approval[]>([])
+  const [loadingData, setLoadingData] = useState(false)
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null)
+  const [tab, setTab] = useState<Tab>('chat')
+  const [showNewProject, setShowNewProject] = useState(false)
+  const [chatStore, setChatStore] = useState<ChatStore>({ home: [] })
 
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [usage, setUsage] = useState<Usage | null>(null);
-  const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [loadingData, setLoadingData] = useState(false);
-
-  const [view, setView] = useState<ActiveView>({ kind: 'home' });
-  const [showNewProject, setShowNewProject] = useState(false);
-
-  // Per-context chat messages
-  const [chatStore, setChatStore] = useState<ChatStore>({ home: [] });
-
-  // ── Data loading ─────────────────────────────────────────────────────────
+  // ── Data loading ────────────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
-    setLoadingData(true);
+    setLoadingData(true)
     try {
       const [projs, usg, appr] = await Promise.all([
         fetchProjects().catch(() => [] as Project[]),
         fetchUsage().catch(() => null),
         fetchApprovals().catch(() => ({ pending: [] as Approval[] })),
-      ]);
-      setProjects(projs);
-      setUsage(usg);
-      setApprovals(appr.pending);
+      ])
+      setProjects(projs)
+      setUsage(usg)
+      setApprovals(appr.pending)
     } finally {
-      setLoadingData(false);
+      setLoadingData(false)
     }
-  }, []);
+  }, [])
 
-  useEffect(() => {
-    if (token) loadAll();
-  }, [token, loadAll]);
+  useEffect(() => { if (token) loadAll() }, [token, loadAll])
 
-  // ── Auth ─────────────────────────────────────────────────────────────────
   function handleLogin() {
-    setToken(localStorage.getItem('bomiko_token'));
+    setToken(localStorage.getItem('bomiko_token'))
   }
 
-  // ── Navigation ────────────────────────────────────────────────────────────
+  // ── Navigation ────────────────────────────────────────────────────────
   function selectHome() {
-    setView({ kind: 'home' });
+    setActiveProjectId(null)
+    setTab('chat')
   }
 
-  function selectProject(project: Project) {
-    setView({ kind: 'project-detail', projectId: project.id });
-    setChatStore(prev => ({
-      ...prev,
-      [project.id]: prev[project.id] ?? [],
-    }));
+  function selectProject(p: Project) {
+    setActiveProjectId(p.id)
+    setTab('chat')
+    setChatStore(prev => ({ ...prev, [p.id]: prev[p.id] ?? [] }))
   }
 
-  function openProjectChat(projectId: string) {
-    setView({ kind: 'project-chat', projectId });
-    setChatStore(prev => ({
-      ...prev,
-      [projectId]: prev[projectId] ?? [],
-    }));
-  }
-
-  // ── Chat helpers ──────────────────────────────────────────────────────────
-  function getChatKey(): string {
-    if (view.kind === 'home') return 'home';
-    return view.projectId;
-  }
-
-  function getCurrentMessages(): ChatMessage[] {
-    return chatStore[getChatKey()] ?? [];
-  }
+  // ── Chat ──────────────────────────────────────────────────────────────
+  const chatKey = activeProjectId ?? 'home'
 
   function handleNewMessage(msg: ChatMessage) {
-    const key = getChatKey();
-    setChatStore(prev => ({
-      ...prev,
-      [key]: [...(prev[key] ?? []), msg],
-    }));
+    setChatStore(prev => ({ ...prev, [chatKey]: [...(prev[chatKey] ?? []), msg] }))
   }
 
-  // ── Projects CRUD ─────────────────────────────────────────────────────────
+  // ── Projects CRUD ─────────────────────────────────────────────────────
   async function handleCreateProject(payload: CreateProjectPayload) {
-    const newProject = await createProject(payload);
-    setProjects(prev => [...prev, newProject]);
-    setShowNewProject(false);
-    selectProject(newProject);
+    const p = await createProject(payload)
+    setProjects(prev => [...prev, p])
+    setShowNewProject(false)
+    selectProject(p)
   }
 
   function handleProjectUpdated(updated: Project) {
-    setProjects(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+    setProjects(prev => prev.map(p => p.id === updated.id ? updated : p))
   }
 
   async function handleDeleteProject(id: string) {
-    await deleteProject(id);
-    setProjects(prev => prev.filter(p => p.id !== id));
-    if ((view.kind === 'project-detail' || view.kind === 'project-chat') && view.projectId === id) {
-      setView({ kind: 'home' });
-    }
+    await deleteProject(id)
+    setProjects(prev => prev.filter(p => p.id !== id))
+    if (activeProjectId === id) setActiveProjectId(null)
   }
 
-  // ── Render: not logged in ─────────────────────────────────────────────────
-  if (!token) {
-    return <LoginPage onLogin={handleLogin} />;
-  }
+  if (!token) return <LoginPage onLogin={handleLogin} />
 
-  // ── Determine current project ─────────────────────────────────────────────
-  const currentProject =
-    view.kind !== 'home'
-      ? projects.find(p => p.id === view.projectId) ?? null
-      : null;
+  const activeProject = activeProjectId
+    ? projects.find(p => p.id === activeProjectId) ?? null
+    : null
 
-  const sidebarActiveId = view.kind === 'home' ? 'home' : view.projectId;
-  const showChat = view.kind === 'home' || view.kind === 'project-chat';
-  const showDetail = view.kind === 'project-detail' && currentProject !== null;
-
-  // For project chat, the ChatPane project prop should be the current project
-  const chatProject = view.kind === 'project-chat' ? currentProject : null;
+  const showPanel = activeProject !== null
+  const title = activeProject ? activeProject.title : 'BOMIKO HQ'
 
   return (
     <div className="app-shell">
       <Sidebar
         projects={projects}
-        activeView={sidebarActiveId}
+        activeView={activeProjectId ?? 'home'}
         onSelectHome={selectHome}
         onSelectProject={selectProject}
         onNewProject={() => setShowNewProject(true)}
       />
 
       <TopBar
-        title={getTitle(view, projects)}
+        title={title}
+        project={activeProject}
+        tab={tab}
+        onTabChange={setTab}
         usage={usage}
         approvals={approvals}
         loading={loadingData}
         onRefresh={loadAll}
       />
 
-      <main className="main-area">
-        {showChat && (
-          <ChatPane
-            project={chatProject}
-            messages={getCurrentMessages()}
-            onNewMessage={handleNewMessage}
-            sessionLabel={null}
-          />
-        )}
+      <main className={`main-area${showPanel ? ' with-panel' : ''}`}>
+        <ChatPane
+          project={activeProject}
+          messages={chatStore[chatKey] ?? []}
+          onNewMessage={handleNewMessage}
+          sessionLabel={activeProject ? `id:hq-project-${activeProject.id}` : 'id:hq-main-chat'}
+        />
 
-        {showDetail && currentProject && (
-          <ProjectDetail
-            project={currentProject}
-            onOpenChat={() => openProjectChat(currentProject.id)}
+        {showPanel && activeProject && (
+          <ProjectPanel
+            project={activeProject}
             onProjectUpdated={handleProjectUpdated}
             onDelete={handleDeleteProject}
           />
@@ -196,5 +139,5 @@ export default function App() {
         />
       )}
     </div>
-  );
+  )
 }
