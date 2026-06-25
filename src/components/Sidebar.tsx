@@ -1,35 +1,17 @@
 import type { Project } from '../api'
 import { clearToken } from '../api'
 
-interface Nav {
-  id: string
-  label: string
-  icon: string
-  badge?: number
-}
-
-const NAV_MAIN: Nav[] = [
-  { id: 'home', label: 'Overview', icon: '⊞' },
-  { id: 'chat', label: 'Main Chat', icon: '◈' },
-  { id: 'approvals', label: 'Approvals', icon: '⚡', badge: 0 },
-]
-
-const NAV_SYSTEM: Nav[] = [
-  { id: 'agents', label: 'Agents', icon: '◎' },
-  { id: 'bomiko', label: 'Bomiko Pipeline', icon: '🥋' },
-]
-
 interface Props {
-  active: string
   projects: Project[]
-  approvalCount: number
-  onNav: (id: string) => void
+  activeView: string        // 'home' | project.id
+  onSelectHome: () => void
+  onSelectProject: (p: Project) => void
   onNewProject: () => void
 }
 
-export function Sidebar({ active, projects, approvalCount, onNav, onNewProject }: Props) {
+export function Sidebar({ projects, activeView, onSelectHome, onSelectProject, onNewProject }: Props) {
   return (
-    <div className="hq-sidebar">
+    <nav className="hq-sidebar">
       <div className="sidebar-logo">
         <span className="logo-icon">⬡</span>
         BOMICO HQ
@@ -37,15 +19,10 @@ export function Sidebar({ active, projects, approvalCount, onNav, onNewProject }
       </div>
 
       <div className="sidebar-section">
-        {NAV_MAIN.map(n => (
-          <div key={n.id} className={`sidebar-item${active === n.id ? ' active' : ''}`}
-            onClick={() => onNav(n.id)}>
-            <span className="item-icon">{n.icon}</span>
-            {n.label}
-            {n.id === 'approvals' && approvalCount > 0 &&
-              <span className="item-badge">{approvalCount}</span>}
-          </div>
-        ))}
+        <div className={`sidebar-item${activeView === 'home' ? ' active' : ''}`} onClick={onSelectHome}>
+          <span className="item-icon">◈</span>
+          Main Chat
+        </div>
       </div>
 
       <div className="sidebar-divider" />
@@ -54,15 +31,15 @@ export function Sidebar({ active, projects, approvalCount, onNav, onNewProject }
         <div className="sidebar-section-label">Projects</div>
         {projects.map(p => (
           <div key={p.id}
-            className={`sidebar-item${active === `project-${p.id}` ? ' active' : ''}`}
-            onClick={() => onNav(`project-${p.id}`)}>
-            <div className="sidebar-project-dot" style={{ background: p.color }} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            className={`sidebar-item${activeView === p.id ? ' active' : ''}`}
+            onClick={() => onSelectProject(p)}>
+            <div className="sidebar-project-dot" style={{ background: p.color ?? '#58a6ff' }} />
+            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
               {p.title}
             </span>
-            {p.checklist?.length > 0 && (
-              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-dim)' }}>
-                {p.checklist.filter(c => c.done).length}/{p.checklist.length}
+            {(p.checklist?.length ?? 0) > 0 && (
+              <span style={{ fontSize:10, color:'var(--text-dim)' }}>
+                {p.checklist?.filter(c => c.done).length ?? 0}/{p.checklist?.length ?? 0}
               </span>
             )}
           </div>
@@ -75,23 +52,26 @@ export function Sidebar({ active, projects, approvalCount, onNav, onNewProject }
       <div className="sidebar-divider" />
 
       <div className="sidebar-section">
-        <div className="sidebar-section-label">System</div>
-        {NAV_SYSTEM.map(n => (
-          <div key={n.id} className={`sidebar-item${active === n.id ? ' active' : ''}`}
-            onClick={() => onNav(n.id)}>
-            <span className="item-icon">{n.icon}</span>
-            {n.label}
-          </div>
-        ))}
+        <div className="sidebar-item" style={{ fontSize:11, color:'var(--text-dim)' }}>
+          <span className="item-icon">◎</span>
+          Agents (16)
+        </div>
+        <div className="sidebar-item">
+          <span className="item-icon">🥋</span>
+          Bomiko Pipeline
+        </div>
       </div>
 
       <div className="sidebar-footer">
-        <div className="sidebar-item" onClick={() => { clearToken(); window.location.reload() }}
-          style={{ cursor: 'pointer' }}>
+        <div className="sidebar-item"
+          style={{ cursor:'pointer' }}
+          onClick={() => { clearToken(); window.location.reload() }}>
           <span className="item-icon">⤴</span>
-          <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Sign out</span>
+          <span style={{ fontSize:11, color:'var(--text-dim)' }}>Sign out</span>
         </div>
       </div>
-    </div>
+    </nav>
   )
 }
+
+export default Sidebar

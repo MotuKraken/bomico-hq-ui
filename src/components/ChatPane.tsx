@@ -63,10 +63,10 @@ export default function ChatPane({
     setSending(true);
 
     try {
-      const res = await sendChat(text, project?.id);
+      const replyText = await sendChat({ message: text, projectId: project?.id });
       const assistantMsg: ChatMessage = {
         role: 'assistant',
-        content: res.result,
+        content: replyText,
         timestamp: new Date().toISOString(),
       };
       onNewMessage(assistantMsg);

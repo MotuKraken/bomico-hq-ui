@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Auth, setToken } from '../api'
 
-export function LoginPage({ onLogin }: { onLogin: () => void }) {
+export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [pw, setPw] = useState('')
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
