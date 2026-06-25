@@ -401,6 +401,80 @@ async def save_chat_to_vault(pid: str, body: dict, user=Depends(verify_token)):
     return {"ok": True, "saved": True, "path": str(out_path)}
 
 
+
+# ── Global Search ─────────────────────────────────────────────────────────────
+@app.get("/api/search")
+async def global_search(q: str, user=Depends(verify_token)):
+    """Search across projects, tasks, vault MD files."""
+    q_lower = q.lower()
+    results = []
+
+    # Search projects + tasks
+    for p in _load_projects():
+        if q_lower in p.get("title","").lower() or q_lower in p.get("description","").lower():
+            results.append({"type":"project","title":p["title"],"id":p["id"],"snippet":p.get("description","")[:100]})
+        for task in p.get("checklist",[]):
+            if q_lower in task.get("text","").lower():
+                results.append({"type":"task","title":task["text"],"project":p["title"],"projectId":p["id"],"snippet":""})
+
+    # Search vault MD files
+    vault_dir = VAULT / "06_Kommunikation/chats"
+    if vault_dir.exists():
+        for f in vault_dir.glob("*.md"):
+            content = f.read_text(errors="ignore")
+            if q_lower in content.lower():
+                idx = content.lower().find(q_lower)
+                snippet = content[max(0,idx-50):idx+100].replace("\n"," ")
+                results.append({"type":"chat","title":f.stem,"snippet":snippet})
+
+    return {"ok": True, "results": results[:20], "query": q}
+
+
+# ── Timeline ──────────────────────────────────────────────────────────────────
+@app.get("/api/timeline")
+async def get_timeline(user=Depends(verify_token)):
+    events = []
+    # Parse vault git log
+    try:
+        result = subprocess.run(
+            ["git", "log", "--pretty=format:%H|%ai|%s", "--since=30 days ago"],
+            capture_output=True, text=True, timeout=10,
+            cwd="/Users/petermettler/Documents/Vault-Konsolidiert"
+        )
+        for line in result.stdout.splitlines()[:30]:
+            parts = line.split("|", 2)
+            if len(parts) == 3:
+                events.append({"type":"commit","hash":parts[0][:8],"ts":parts[1],"title":parts[2]})
+    except Exception:
+        pass
+    # Add project creation events
+    for p in _load_projects():
+        if p.get("createdAt"):
+            events.append({"type":"project","ts":p["createdAt"],"title":f"Projekt erstellt: {p['title']}","id":p["id"]})
+    events.sort(key=lambda x: x.get("ts",""), reverse=True)
+    return {"ok": True, "events": events[:40]}
+
+
+# ── Cron Jobs ─────────────────────────────────────────────────────────────────
+@app.get("/api/cron")
+async def get_cron_jobs(user=Depends(verify_token)):
+    result = subprocess.run(
+        ["openclaw", "cron", "list", "--json"],
+        capture_output=True, text=True, timeout=10, env=OC_ENV
+    )
+    if result.returncode == 0:
+        try:
+            return {"ok": True, "jobs": json.loads(result.stdout)}
+        except Exception:
+            pass
+    # Fallback: parse text output
+    result2 = subprocess.run(
+        ["openclaw", "cron", "list"],
+        capture_output=True, text=True, timeout=10, env=OC_ENV
+    )
+    return {"ok": True, "raw": result2.stdout, "jobs": []}
+
+
 # ── Static ────────────────────────────────────────────────────────────────────
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")

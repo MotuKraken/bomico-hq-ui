@@ -17,6 +17,7 @@ export function ProjectPanel({ project, onProjectUpdated, onDelete }: Props) {
   const [newTaskText, setNewTaskText] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null)
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
   const newTaskRef = useRef<HTMLInputElement>(null)
 
   const checklist = project.checklist ?? []
@@ -124,10 +125,24 @@ export function ProjectPanel({ project, onProjectUpdated, onDelete }: Props) {
         </div>
 
         <div className="pp-checklist">
-          {checklist.map(item => (
+          {checklist.map((item, i) => (
             <div key={item.id}
               className={`pp-check-item${selected.has(item.id) ? ' selected' : ''}`}
-              onContextMenu={e => handleContextMenu(e, item)}>
+              onContextMenu={e => handleContextMenu(e, item)}
+              draggable={true}
+              onDragStart={() => setDragIdx(i)}
+              onDragOver={e => { e.preventDefault() }}
+              onDrop={async () => {
+                if (dragIdx === null || dragIdx === i) return
+                const reordered = [...checklist]
+                const [moved] = reordered.splice(dragIdx, 1)
+                reordered.splice(i, 0, moved)
+                await save(reordered)
+                setDragIdx(null)
+              }}>
+
+              {/* Drag handle */}
+              <span className="pp-drag-handle">⠿</span>
 
               {/* Select checkbox (appears on hover or when any selected) */}
               <div

@@ -7,9 +7,11 @@ interface Props {
   onSelectHome: () => void
   onSelectProject: (p: Project) => void
   onNewProject: () => void
+  onSelectTimeline?: () => void
+  onSelectCron?: () => void
 }
 
-export function Sidebar({ projects, activeView, onSelectHome, onSelectProject, onNewProject }: Props) {
+export function Sidebar({ projects, activeView, onSelectHome, onSelectProject, onNewProject, onSelectTimeline, onSelectCron }: Props) {
   return (
     <nav className="hq-sidebar">
       <div className="sidebar-logo">
@@ -23,6 +25,18 @@ export function Sidebar({ projects, activeView, onSelectHome, onSelectProject, o
           <span className="item-icon">◈</span>
           Main Chat
         </div>
+        {onSelectTimeline && (
+          <div className={`sidebar-item${activeView === 'timeline' ? ' active' : ''}`} onClick={onSelectTimeline}>
+            <span className="item-icon">📅</span>
+            Timeline
+          </div>
+        )}
+        {onSelectCron && (
+          <div className={`sidebar-item${activeView === 'cron' ? ' active' : ''}`} onClick={onSelectCron}>
+            <span className="item-icon">⏰</span>
+            Cron Jobs
+          </div>
+        )}
       </div>
 
       <div className="sidebar-divider" />

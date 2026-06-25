@@ -96,3 +96,38 @@ export const saveChatToVault = (projectId: string, messages: ChatMessage[]) =>
   apiFetch<{ ok: boolean; saved: boolean; path: string }>(
     'POST', `/projects/${projectId}/save-chat`, { messages }
   )
+
+// ─── Search ────────────────────────────────────────────────────────────────
+export interface SearchResult {
+  type: 'project' | 'task' | 'chat'
+  title: string
+  id?: string
+  projectId?: string
+  project?: string
+  snippet?: string
+}
+export const searchGlobal = (q: string) =>
+  apiFetch<{ ok: boolean; results: SearchResult[]; query: string }>('GET', `/search?q=${encodeURIComponent(q)}`)
+
+// ─── Timeline ──────────────────────────────────────────────────────────────
+export interface TimelineEvent {
+  type: 'commit' | 'project'
+  hash?: string
+  ts: string
+  title: string
+  id?: string
+}
+export const getTimeline = () =>
+  apiFetch<{ ok: boolean; events: TimelineEvent[] }>('GET', '/timeline')
+
+// ─── Cron ──────────────────────────────────────────────────────────────────
+export interface CronJob {
+  id?: string
+  name?: string
+  schedule?: string
+  lastRun?: string
+  status?: string
+  [key: string]: unknown
+}
+export const getCronJobs = () =>
+  apiFetch<{ ok: boolean; jobs: CronJob[]; raw?: string }>('GET', '/cron')

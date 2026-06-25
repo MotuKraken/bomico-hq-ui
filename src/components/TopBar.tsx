@@ -12,9 +12,10 @@ interface Props {
   loading: boolean
   onRefresh: () => Promise<void>
   onSaveChat?: () => void
+  onSearch?: () => void
 }
 
-export function TopBar({ title, project, tab, onTabChange, usage, approvals, loading, onRefresh, onSaveChat }: Props) {
+export function TopBar({ title, project, tab, onTabChange, usage, approvals, loading, onRefresh, onSaveChat, onSearch }: Props) {
   const pct = usage?.budgetUsedPct ?? 0
   const barColor = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)'
 
@@ -55,6 +56,11 @@ export function TopBar({ title, project, tab, onTabChange, usage, approvals, loa
         {project && tab === 'chat' && onSaveChat && (
           <button className="topbar-save-btn" onClick={onSaveChat} title="Chat in Vault speichern">
             💾
+          </button>
+        )}
+        {onSearch && (
+          <button className="topbar-save-btn" onClick={onSearch} title="Suchen">
+            🔍
           </button>
         )}
         <div className="status-dot" />
