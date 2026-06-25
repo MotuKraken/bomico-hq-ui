@@ -23,7 +23,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-logo">⬡ BOMICO HQ</div>
+        <div className="login-logo">⬡ BOMIKO HQ</div>
         <div className="login-sub">Mission Control — Private Access</div>
         <form onSubmit={handleSubmit}>
           <label className="login-label">Password</label>

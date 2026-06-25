@@ -14,7 +14,7 @@ export function Sidebar({ projects, activeView, onSelectHome, onSelectProject, o
     <nav className="hq-sidebar">
       <div className="sidebar-logo">
         <span className="logo-icon">⬡</span>
-        BOMICO HQ
+        BOMIKO HQ
         <span className="logo-badge">LIVE</span>
       </div>
 

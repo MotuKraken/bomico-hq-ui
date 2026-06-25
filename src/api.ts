@@ -1,4 +1,4 @@
-// BOMICO HQ — unified API client
+// BOMIKO HQ — unified API client
 
 import type {
   Project, CreateProjectPayload, UpdateProjectPayload,
@@ -11,7 +11,7 @@ export type { ChecklistItem as CheckItem } from './types'
 export type UsageData = UsageType   // TopBar uses UsageData
 
 // ─── Token ─────────────────────────────────────────────────────────────────
-const TOKEN_KEY = 'bomico_token'
+const TOKEN_KEY = 'bomiko_token'
 let _token = localStorage.getItem(TOKEN_KEY) || ''
 
 export function setToken(t: string) { _token = t; localStorage.setItem(TOKEN_KEY, t) }

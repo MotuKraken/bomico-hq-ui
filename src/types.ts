@@ -1,4 +1,4 @@
-// BOMICO HQ – shared TypeScript types
+// BOMIKO HQ – shared TypeScript types
 
 export interface Project {
   id: string;

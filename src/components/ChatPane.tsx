@@ -87,7 +87,7 @@ export default function ChatPane({
 
   const placeholder = project
     ? `Ask anything about ${project.title}…`
-    : 'Ask BOMICO anything…';
+    : 'Ask BOMIKO anything…';
 
   return (
     <div className="chat-pane">
@@ -112,8 +112,8 @@ export default function ChatPane({
             </div>
             <div className="chat-empty-hint">
               {project
-                ? `Chat with BOMICO in the context of "${project.title}". Ask about goals, progress, next steps.`
-                : 'Ask BOMICO anything. Full agent capabilities are available here.'}
+                ? `Chat with BOMIKO in the context of "${project.title}". Ask about goals, progress, next steps.`
+                : 'Ask BOMIKO anything. Full agent capabilities are available here.'}
             </div>
           </div>
         )}
@@ -121,7 +121,7 @@ export default function ChatPane({
         {messages.map((msg, i) => (
           <div key={i} className={`chat-msg ${msg.role}`}>
             <div className="chat-msg-label">
-              {msg.role === 'user' ? 'You' : 'BOMICO'}
+              {msg.role === 'user' ? 'You' : 'BOMIKO'}
             </div>
             <div className="chat-msg-bubble">{msg.content}</div>
             {msg.timestamp && (
@@ -135,7 +135,7 @@ export default function ChatPane({
             <div className="chat-typing-dots">
               <span /><span /><span />
             </div>
-            BOMICO is thinking…
+            BOMIKO is thinking…
           </div>
         )}
 

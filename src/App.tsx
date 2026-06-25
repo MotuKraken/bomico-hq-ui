@@ -28,14 +28,14 @@ type ActiveView =
   | { kind: 'project-chat'; projectId: string };
 
 function getTitle(view: ActiveView, projects: Project[]): string {
-  if (view.kind === 'home') return 'BOMICO HQ';
+  if (view.kind === 'home') return 'BOMIKO HQ';
   const p = projects.find(x => x.id === view.projectId);
-  if (!p) return 'BOMICO HQ';
+  if (!p) return 'BOMIKO HQ';
   return view.kind === 'project-chat' ? `Chat · ${p.title}` : p.title;
 }
 
 export default function App() {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('bomico_token'));
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('bomiko_token'));
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -71,7 +71,7 @@ export default function App() {
 
   // ── Auth ─────────────────────────────────────────────────────────────────
   function handleLogin() {
-    setToken(localStorage.getItem('bomico_token'));
+    setToken(localStorage.getItem('bomiko_token'));
   }
 
   // ── Navigation ────────────────────────────────────────────────────────────

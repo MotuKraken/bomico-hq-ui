@@ -1,5 +1,5 @@
 """
-BOMICO HQ — Backend Server
+BOMIKO HQ — Backend Server
 Port 8898 → hq.bomiko.de via Cloudflare Tunnel
 """
 import asyncio, json, os, secrets, subprocess, time
@@ -25,7 +25,7 @@ STATIC_DIR    = Path(__file__).parent / "dist"
 
 _jwt_secret = secrets.token_hex(32)
 
-app = FastAPI(title="BOMICO HQ", version="1.0.0")
+app = FastAPI(title="BOMIKO HQ", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True,
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -239,7 +239,7 @@ if STATIC_DIR.exists():
 else:
     @app.get("/")
     async def root():
-        return {"status": "backend ok", "note": "run npm run build in bomico-hq-ui first"}
+        return {"status": "backend ok", "note": "run npm run build in bomiko-hq-ui first"}
 
 if __name__ == "__main__":
     import uvicorn
